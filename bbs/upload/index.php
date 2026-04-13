@@ -435,6 +435,7 @@ function adminPanel($link) {
                 <a href="?action=admin&tab=audit" class="' . ($tab=='audit'?'active':'') . '">待审核</a>
                 <a href="?action=admin&tab=sensitive" class="' . ($tab=='sensitive'?'active':'') . '">敏感词管理</a>
                 <a href="?action=admin&tab=whitelist" class="' . ($tab=='whitelist'?'active':'') . '">白名单用户</a>
+                <a href="?action=admin&tab=forum" class="' . ($tab=='forum'?'active':'') . '">板块管理</a>
                 <a href="?">返回首页</a>
             </div>
         </div>';
@@ -503,6 +504,52 @@ function adminPanel($link) {
                 <td>' . date('Y-m-d H:i', $item['addtime']) . '</td>
                 <td>' . htmlspecialchars($item['note']) . '</td>
                 <td><a href="?action=del_whitelist&id=' . $item['id'] . '">移除</a></td>
+            </tr>';
+        }
+        echo '</table></div>';
+    }
+    
+    if ($tab == 'forum') {
+        if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_forum'])) {
+            $name = mysqli_real_escape_string($link, $_POST['name']);
+            $fup = intval($_POST['fup'] ?? 1);
+            $now = time();
+            mysqli_query($link, "INSERT INTO pre_forum_forum (fup, type, name, status, displayorder) VALUES ($fup, 'forum', '$name', 1, 0)");
+        }
+        
+        if (isset($_GET['del_forum'])) {
+            $fid = intval($_GET['del_forum']);
+            mysqli_query($link, "DELETE FROM pre_forum_forum WHERE fid=$fid AND type='forum'");
+        }
+        
+        echo '<div class="tab-content active">
+            <h3>板块管理</h3>
+            <form action="?action=admin&tab=forum" method="post" class="form-inline">
+                <input type="hidden" name="add_forum" value="1">
+                <input type="text" name="name" placeholder="板块名称" required>
+                <select name="fup">';
+        
+        $categories = mysqli_query($link, "SELECT * FROM pre_forum_forum WHERE type='group' ORDER BY displayorder");
+        while ($cat = mysqli_fetch_assoc($categories)) {
+            echo '<option value="' . $cat['fid'] . '">' . htmlspecialchars($cat['name']) . '</option>';
+        }
+        
+        echo '</select>
+                <button type="submit">添加板块</button>
+            </form>
+            <table>
+            <tr><th>ID</th><th>板块名称</th><th>所属分类</th><th>帖子数</th><th>操作</th></tr>';
+        
+        $result = mysqli_query($link, "SELECT f.*, p.name as parent_name FROM pre_forum_forum f 
+            LEFT JOIN pre_forum_forum p ON f.fup=p.fid 
+            WHERE f.type='forum' ORDER BY f.displayorder");
+        while ($item = mysqli_fetch_assoc($result)) {
+            echo '<tr>
+                <td>' . $item['fid'] . '</td>
+                <td>' . htmlspecialchars($item['name']) . '</td>
+                <td>' . htmlspecialchars($item['parent_name'] ?? '顶级') . '</td>
+                <td>' . ($item['threads'] ?? 0) . '</td>
+                <td><a href="?action=admin&tab=forum&del_forum=' . $item['fid'] . '">删除</a></td>
             </tr>';
         }
         echo '</table></div>';
