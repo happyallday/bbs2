@@ -51,6 +51,18 @@ switch ($action) {
     case 'audit':
         auditPost($link);
         break;
+    case 'add_word':
+        addSensitiveWord($link);
+        break;
+    case 'del_word':
+        deleteSensitiveWord($link);
+        break;
+    case 'add_whitelist':
+        addToWhitelist($link);
+        break;
+    case 'del_whitelist':
+        removeFromWhitelist($link);
+        break;
     default:
         index($link);
 }
@@ -346,14 +358,42 @@ function submitPost($link) {
         die('标题和内容不能为空');
     }
     
-    mysqli_query($link, "INSERT INTO pre_forum_thread (fid, author, authorid, subject, dateline, lastpost, lastposter) 
-        VALUES ($fid, '$username', $uid, '$subject', $now, $now, '$username')");
-    $tid = mysqli_insert_id($link);
+    require_once __DIR__ . '/source/class/sensitive_filter.php';
+    $filter = new SensitiveWordFilter($link);
+    $filter->init();
     
-    mysqli_query($link, "INSERT INTO pre_forum_post (fid, tid, first, author, authorid, subject, message, dateline) 
-        VALUES ($fid, $tid, 1, '$username', $uid, '$subject', '$message', $now)");
+    $subjectCheck = $filter->filter($subject);
+    $messageCheck = $filter->filter($message);
     
-    echo '发布成功！<a href="?action=view&tid=' . $tid . '">查看帖子</a>';
+    $isWhitelist = $filter->isWhitelistUser($link, $uid);
+    
+    if ($isWhitelist) {
+        mysqli_query($link, "INSERT INTO pre_forum_thread (fid, author, authorid, subject, dateline, lastpost, lastposter) 
+            VALUES ($fid, '$username', $uid, '$subject', $now, $now, '$username')");
+        $tid = mysqli_insert_id($link);
+        
+        mysqli_query($link, "INSERT INTO pre_forum_post (fid, tid, first, author, authorid, subject, message, dateline) 
+            VALUES ($fid, $tid, 1, '$username', $uid, '$subject', '$message', $now)");
+        
+        echo '发布成功！<a href="?action=view&tid=' . $tid . '">查看帖子</a>';
+    } elseif ($subjectCheck['blocked'] || $messageCheck['blocked']) {
+        $fullContent = $subject . "\n" . $message;
+        
+        mysqli_query($link, "INSERT INTO pre_common_audit 
+            (uid, username, fid, tid, pid, content, type, status, createtime) 
+            VALUES ($uid, '$username', $fid, 0, 0, '$fullContent', 'post', 0, $now)");
+        
+        echo '内容包含敏感词，已提交人工审核。耐心等待审核通过后即可显示。<br><a href="?">返回首页</a>';
+    } else {
+        mysqli_query($link, "INSERT INTO pre_forum_thread (fid, author, authorid, subject, dateline, lastpost, lastposter) 
+            VALUES ($fid, '$username', $uid, '$subject', $now, $now, '$username')");
+        $tid = mysqli_insert_id($link);
+        
+        mysqli_query($link, "INSERT INTO pre_forum_post (fid, tid, first, author, authorid, subject, message, dateline) 
+            VALUES ($fid, $tid, 1, '$username', $uid, '$subject', '$message', $now)");
+        
+        echo '发布成功！<a href="?action=view&tid=' . $tid . '">查看帖子</a>';
+    }
 }
 
 function adminPanel($link) {
@@ -363,7 +403,7 @@ function adminPanel($link) {
         exit;
     }
     
-    $result = mysqli_query($link, "SELECT * FROM pre_common_audit WHERE status=0 ORDER BY createtime DESC");
+    $tab = $_GET['tab'] ?? 'audit';
     
     echo '<!DOCTYPE html>
 <html>
@@ -372,28 +412,100 @@ function adminPanel($link) {
     <title>审核管理</title>
     <style>
         body { font-family: "Microsoft YaHei", Arial, sans-serif; background: #f5f5f5; padding: 20px; }
-        .container { max-width: 1000px; margin: 0 auto; }
+        .container { max-width: 1200px; margin: 0 auto; }
         .header { background: #fff; padding: 20px; margin-bottom: 20px; border-radius: 5px; }
-        .audit-item { background: #fff; padding: 20px; margin-bottom: 15px; border-radius: 5px; }
+        .nav { margin-bottom: 20px; }
+        .nav a { display: inline-block; padding: 10px 20px; background: #fff; text-decoration: none; margin-right: 10px; border-radius: 3px; }
+        .nav a.active { background: #3498db; color: #fff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .audit-item, .word-item, .user-item { background: #fff; padding: 20px; margin-bottom: 15px; border-radius: 5px; }
+        .form-inline { display: inline-block; }
+        .form-inline input { padding: 8px; border: 1px solid #ddd; border-radius: 3px; }
+        .form-inline button { padding: 8px 15px; background: #3498db; color: #fff; border: none; border-radius: 3px; cursor: pointer; }
+        table { width: 100%; border-collapse: collapse; background: #fff; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h2>待审核内容</h2>
-            <a href="?">返回首页</a>
+            <h2>管理后台</h2>
+            <div class="nav">
+                <a href="?action=admin&tab=audit" class="' . ($tab=='audit'?'active':'') . '">待审核</a>
+                <a href="?action=admin&tab=sensitive" class="' . ($tab=='sensitive'?'active':'') . '">敏感词管理</a>
+                <a href="?action=admin&tab=whitelist" class="' . ($tab=='whitelist'?'active':'') . '">白名单用户</a>
+                <a href="?">返回首页</a>
+            </div>
         </div>';
     
-    while ($item = mysqli_fetch_assoc($result)) {
-        echo '<div class="audit-item">
-            <p>用户: ' . htmlspecialchars($item['username']) . '</p>
-            <p>内容: ' . htmlspecialchars($item['content']) . '</p>
-            <form action="?action=audit" method="post">
-                <input type="hidden" name="id" value="' . $item['id'] . '">
-                <button name="status" value="1">通过</button>
-                <button name="status" value="2">拒绝</button>
+    if ($tab == 'audit') {
+        $result = mysqli_query($link, "SELECT * FROM pre_common_audit WHERE status=0 ORDER BY createtime DESC");
+        echo '<div class="tab-content active">
+            <h3>待审核内容</h3>';
+        while ($item = mysqli_fetch_assoc($result)) {
+            echo '<div class="audit-item">
+                <p><strong>用户:</strong> ' . htmlspecialchars($item['username']) . '</p>
+                <p><strong>内容:</strong></p>
+                <pre style="background:#f9f9f9;padding:10px;white-space:pre-wrap;">' . htmlspecialchars($item['content']) . '</pre>
+                <form action="?action=audit" method="post">
+                    <input type="hidden" name="id" value="' . $item['id'] . '">
+                    <input type="hidden" name="tab" value="audit">
+                    <button name="status" value="1" style="background:#27ae60;padding:8px 20px;color:#fff;border:none;cursor:pointer;">通过</button>
+                    <button name="status" value="2" style="background:#e74c3c;padding:8px 20px;color:#fff;border:none;cursor:pointer;">拒绝</button>
+                </form>
+            </div>';
+        }
+        echo '</div>';
+    }
+    
+    if ($tab == 'sensitive') {
+        echo '<div class="tab-content active">
+            <h3>敏感词管理</h3>
+            <form action="?action=add_word" method="post" class="form-inline">
+                <input type="text" name="word" placeholder="敏感词" required>
+                <input type="text" name="replacement" placeholder="替换词(默认***)" value="***">
+                <button type="submit">添加</button>
             </form>
-        </div>';
+            <table>
+            <tr><th>ID</th><th>敏感词</th><th>替换词</th><th>操作</th></tr>';
+        
+        $result = mysqli_query($link, "SELECT * FROM pre_common_sensitive ORDER BY id DESC");
+        while ($item = mysqli_fetch_assoc($result)) {
+            echo '<tr>
+                <td>' . $item['id'] . '</td>
+                <td>' . htmlspecialchars($item['word']) . '</td>
+                <td>' . htmlspecialchars($item['replacement']) . '</td>
+                <td><a href="?action=del_word&id=' . $item['id'] . '">删除</a></td>
+            </tr>';
+        }
+        echo '</table></div>';
+    }
+    
+    if ($tab == 'whitelist') {
+        echo '<div class="tab-content active">
+            <h3>白名单用户 (免审核)</h3>
+            <form action="?action=add_whitelist" method="post" class="form-inline">
+                <input type="text" name="uid" placeholder="用户ID" required>
+                <input type="text" name="username" placeholder="用户名" required>
+                <input type="text" name="note" placeholder="备注">
+                <button type="submit">添加白名单</button>
+            </form>
+            <table>
+            <tr><th>ID</th><th>用户ID</th><th>用户名</th><th>添加时间</th><th>备注</th><th>操作</th></tr>';
+        
+        $result = mysqli_query($link, "SELECT * FROM pre_common_whitelist ORDER BY id DESC");
+        while ($item = mysqli_fetch_assoc($result)) {
+            echo '<tr>
+                <td>' . $item['id'] . '</td>
+                <td>' . $item['uid'] . '</td>
+                <td>' . htmlspecialchars($item['username']) . '</td>
+                <td>' . date('Y-m-d H:i', $item['addtime']) . '</td>
+                <td>' . htmlspecialchars($item['note']) . '</td>
+                <td><a href="?action=del_whitelist&id=' . $item['id'] . '">移除</a></td>
+            </tr>';
+        }
+        echo '</table></div>';
     }
     
     echo '</div>
@@ -404,8 +516,65 @@ function adminPanel($link) {
 function auditPost($link) {
     $id = intval($_POST['id']);
     $status = intval($_POST['status']);
+    $tab = $_POST['tab'] ?? 'audit';
+    
+    $audit = mysqli_fetch_assoc(mysqli_query($link, "SELECT * FROM pre_common_audit WHERE id=$id"));
+    
+    if ($status == 1 && $audit) {
+        $content = $audit['content'];
+        $lines = explode("\n", $content, 2);
+        $subject = mysqli_real_escape_string($link, trim($lines[0]));
+        $message = mysqli_real_escape_string($link, trim($lines[1] ?? ''));
+        
+        $fid = $audit['fid'];
+        $uid = $audit['uid'];
+        $username = mysqli_real_escape_string($link, $audit['username']);
+        $now = time();
+        
+        mysqli_query($link, "INSERT INTO pre_forum_thread (fid, author, authorid, subject, dateline, lastpost, lastposter) 
+            VALUES ($fid, '$username', $uid, '$subject', $now, $now, '$username')");
+        $tid = mysqli_insert_id($link);
+        
+        mysqli_query($link, "INSERT INTO pre_forum_post (fid, tid, first, author, authorid, subject, message, dateline) 
+            VALUES ($fid, $tid, 1, '$username', $uid, '$subject', '$message', $now)");
+    }
     
     mysqli_query($link, "UPDATE pre_common_audit SET status=$status, audittime=" . time() . " WHERE id=$id");
     
-    header('Location: ?action=admin');
+    header("Location: ?action=admin&tab=" . $tab);
+}
+
+function addSensitiveWord($link) {
+    $word = mysqli_real_escape_string($link, trim($_POST['word']));
+    $replacement = mysqli_real_escape_string($link, $_POST['replacement'] ?? '***');
+    $now = time();
+    
+    mysqli_query($link, "INSERT INTO pre_common_sensitive (word, replacement, level, addtime) 
+        VALUES ('$word', '$replacement', 1, $now)");
+    
+    header('Location: ?action=admin&tab=sensitive');
+}
+
+function deleteSensitiveWord($link) {
+    $id = intval($_GET['id']);
+    mysqli_query($link, "DELETE FROM pre_common_sensitive WHERE id=$id");
+    header('Location: ?action=admin&tab=sensitive');
+}
+
+function addToWhitelist($link) {
+    $uid = intval($_POST['uid']);
+    $username = mysqli_real_escape_string($link, trim($_POST['username']));
+    $note = mysqli_real_escape_string($link, $_POST['note'] ?? '');
+    $now = time();
+    
+    mysqli_query($link, "INSERT INTO pre_common_whitelist (uid, username, addtime, note) 
+        VALUES ($uid, '$username', $now, '$note')");
+    
+    header('Location: ?action=admin&tab=whitelist');
+}
+
+function removeFromWhitelist($link) {
+    $id = intval($_GET['id']);
+    mysqli_query($link, "DELETE FROM pre_common_whitelist WHERE id=$id");
+    header('Location: ?action=admin&tab=whitelist');
 }
