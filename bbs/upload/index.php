@@ -348,13 +348,13 @@ function submitPost($link) {
     }
     
     $fid = intval($_POST['fid']);
-    $subject = mysqli_real_escape_string($link, trim($_POST['subject']));
-    $message = mysqli_real_escape_string($link, trim($_POST['message']));
+    $subject_raw = trim($_POST['subject'] ?? '');
+    $message_raw = trim($_POST['message'] ?? '');
     $uid = $_SESSION['uid'];
     $username = mysqli_real_escape_string($link, $_SESSION['username']);
     $now = time();
     
-    if (empty($subject) || empty($message)) {
+    if (empty($subject_raw) || empty($message_raw)) {
         die('标题和内容不能为空');
     }
     
@@ -362,35 +362,40 @@ function submitPost($link) {
     $filter = new SensitiveWordFilter($link);
     $filter->init();
     
-    $subjectCheck = $filter->filter($subject);
-    $messageCheck = $filter->filter($message);
+    $subjectCheck = $filter->filter($subject_raw);
+    $messageCheck = $filter->filter($message_raw);
     
     $isWhitelist = $filter->isWhitelistUser($link, $uid);
     
     if ($isWhitelist) {
+        $subject_esc = mysqli_real_escape_string($link, $subject_raw);
+        $message_esc = mysqli_real_escape_string($link, $message_raw);
         mysqli_query($link, "INSERT INTO pre_forum_thread (fid, author, authorid, subject, dateline, lastpost, lastposter) 
-            VALUES ($fid, '$username', $uid, '$subject', $now, $now, '$username')");
+            VALUES ($fid, '$username', $uid, '$subject_esc', $now, $now, '$username')");
         $tid = mysqli_insert_id($link);
         
         mysqli_query($link, "INSERT INTO pre_forum_post (fid, tid, first, author, authorid, subject, message, dateline) 
-            VALUES ($fid, $tid, 1, '$username', $uid, '$subject', '$message', $now)");
+            VALUES ($fid, $tid, 1, '$username', $uid, '$subject_esc', '$message_esc', $now)");
         
         echo '发布成功！<a href="?action=view&tid=' . $tid . '">查看帖子</a>';
     } elseif ($subjectCheck['blocked'] || $messageCheck['blocked']) {
-        $fullContent = $subject . "\n" . $message;
+        $fullContent = $subject_raw . "\n" . $message_raw;
+        $fullContent_esc = mysqli_real_escape_string($link, $fullContent);
         
         mysqli_query($link, "INSERT INTO pre_common_audit 
             (uid, username, fid, tid, pid, content, type, status, createtime) 
-            VALUES ($uid, '$username', $fid, 0, 0, '$fullContent', 'post', 0, $now)");
+            VALUES ($uid, '$username', $fid, 0, 0, '$fullContent_esc', 'post', 0, $now)");
         
         echo '内容包含敏感词，已提交人工审核。耐心等待审核通过后即可显示。<br><a href="?">返回首页</a>';
     } else {
+        $subject_esc = mysqli_real_escape_string($link, $subject_raw);
+        $message_esc = mysqli_real_escape_string($link, $message_raw);
         mysqli_query($link, "INSERT INTO pre_forum_thread (fid, author, authorid, subject, dateline, lastpost, lastposter) 
-            VALUES ($fid, '$username', $uid, '$subject', $now, $now, '$username')");
+            VALUES ($fid, '$username', $uid, '$subject_esc', $now, $now, '$username')");
         $tid = mysqli_insert_id($link);
         
         mysqli_query($link, "INSERT INTO pre_forum_post (fid, tid, first, author, authorid, subject, message, dateline) 
-            VALUES ($fid, $tid, 1, '$username', $uid, '$subject', '$message', $now)");
+            VALUES ($fid, $tid, 1, '$username', $uid, '$subject_esc', '$message_esc', $now)");
         
         echo '发布成功！<a href="?action=view&tid=' . $tid . '">查看帖子</a>';
     }

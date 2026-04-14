@@ -141,6 +141,7 @@ class SensitiveWordFilter {
     
     public function isWhitelistUser($dbLink, $uid) {
         $uid = intval($uid);
+        if ($uid == 1) return false; // 管理员不享受白名单
         $result = mysqli_query($dbLink, "SELECT id FROM pre_common_whitelist WHERE uid=$uid");
         return mysqli_num_rows($result) > 0;
     }
