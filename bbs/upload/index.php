@@ -77,57 +77,135 @@ function index($link) {
         $forums[] = $row;
     }
     
+    $hotThreads = mysqli_query($link, "SELECT t.*, f.name as forum_name FROM pre_forum_thread t 
+        LEFT JOIN pre_forum_forum f ON t.fid=f.fid 
+        ORDER BY t.views DESC LIMIT 5");
+    
     if (!isset($_SESSION)) { session_start(); }
     $isLogin = isset($_SESSION['uid']);
     $username = $_SESSION['username'] ?? '';
+    $avatar = $isLogin ? mb_substr($username, 0, 1) : '?';
     
     echo '<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>企业员工论坛</title>
-    <style>
-        body { font-family: "Microsoft YaHei", Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
-        .header { background: #2c3e50; color: #fff; padding: 15px 30px; }
-        .header h1 { margin: 0; display: inline-block; }
-        .header .nav { float: right; }
-        .header a { color: #fff; text-decoration: none; margin-left: 20px; }
-        .container { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
-        .forum-list { background: #fff; border-radius: 5px; }
-        .forum-item { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
-        .forum-item:last-child { border-bottom: none; }
-        .forum-name { font-size: 18px; color: #2c3e50; font-weight: bold; }
-        .forum-stats { color: #999; font-size: 14px; }
-        .welcome { background: #fff; padding: 15px 20px; margin-bottom: 20px; border-radius: 5px; }
-        .btn { display: inline-block; padding: 8px 20px; background: #3498db; color: #fff; text-decoration: none; border-radius: 3px; }
-        .btn:hover { background: #2980b9; }
-    </style>
+    <link rel="stylesheet" href="/template/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="header">
-        <h1>企业员工论坛</h1>
-        <div class="nav">
-            ' . ($isLogin ? '<span>欢迎, ' . htmlspecialchars($username) . '</span> <a href="?action=logout">退出</a>' : '<a href="?action=login">登录</a>') . '
+        <div class="header-logo">
+            <i class="fas fa-comments" style="font-size:32px;color:#667eea;"></i>
+            <h1>企业员工论坛</h1>
+        </div>
+        <div class="header-nav">
+            <a href="/"><i class="fas fa-home"></i> 首页</a>
+            ' . ($isLogin ? '
+                <a href="?action=admin"><i class="fas fa-cog"></i> 管理后台</a>
+                <div class="user-info">
+                    <div class="avatar">' . $avatar . '</div>
+                    <span>' . htmlspecialchars($username) . '</span>
+                </div>
+                <a href="?action=logout" style="color:#ff4d4f;"><i class="fas fa-sign-out-alt"></i> 退出</a>
+            ' : '<a href="?action=login"><i class="fas fa-sign-in-alt"></i> 登录</a>') . '
         </div>
     </div>
-    <div class="container">
-        <div class="welcome">
-            欢迎访问企业员工论坛！请遵守论坛规则，文明发言。
-            <br><small>本系统仅限办公网(172.20.0.0/16)及本机访问</small>
-        </div>
-        <div class="forum-list">
-            <h2>论坛板块</h2>';
     
+    <div class="container">
+        <div class="welcome-banner">
+            <h2><i class="fas fa-bullhorn"></i> 欢迎来到企业员工论坛</h2>
+            <p>分享工作经验、交流技术心得、发布通知公告，让我们共同打造和谐的企业文化！</p>
+        </div>
+        
+        <div class="quick-actions">
+            <a href="?action=post&fid=2" class="action-card">
+                <div class="icon"><i class="fas fa-pen"></i></div>
+                <h4>发布新帖</h4>
+                <p>分享你的想法</p>
+            </a>
+            <a href="?action=forum&id=3" class="action-card">
+                <div class="icon"><i class="fas fa-bullhorn"></i></div>
+                <h4>公告区</h4>
+                <p>查看公司公告</p>
+            </a>
+            <a href="?action=forum&id=4" class="action-card">
+                <div class="icon"><i class="fas fa-lightbulb"></i></div>
+                <h4>建议反馈</h4>
+                <p>提出意见建议</p>
+            </a>
+            <a href="?action=login" class="action-card">
+                <div class="icon"><i class="fas fa-user-plus"></i></div>
+                <h4>' . ($isLogin ? '个人中心' : '加入我们') . '</h4>
+                <p>' . ($isLogin ? '管理我的帖子' : '登录参与讨论') . '</p>
+            </a>
+        </div>
+        
+        <div class="forum-section">
+            <div class="section-header">
+                <div class="section-title">
+                    <div class="icon"><i class="fas fa-layer-group"></i></div>
+                    论坛板块
+                </div>
+            </div>';
+    
+    $icons = ['fa-comments', 'fa-bullhorn', 'fa-lightbulb', 'fa-book', 'fa-code', 'video'];
+    $iconIndex = 0;
     foreach ($forums as $forum) {
-        echo '<div class="forum-item">
-            <div>
-                <div class="forum-name">' . htmlspecialchars($forum['name']) . '</div>
+        $icon = $icons[$iconIndex % count($icons)];
+        $threadCount = mysqli_fetch_assoc(mysqli_query($link, "SELECT COUNT(*) as cnt FROM pre_forum_thread WHERE fid=" . $forum['fid']))['cnt'] ?? 0;
+        $postCount = mysqli_fetch_assoc(mysqli_query($link, "SELECT SUM(replies) as total FROM pre_forum_thread WHERE fid=" . $forum['fid']))['total'] ?? 0;
+        
+        echo '<div class="forum-card">
+            <div class="forum-info">
+                <div class="forum-icon"><i class="fas ' . $icon . '"></i></div>
+                <div class="forum-details">
+                    <h3>' . htmlspecialchars($forum['name']) . '</h3>
+                    <p>' . ($forum['description'] ?? '点击进入版块') . '</p>
+                </div>
             </div>
-            <a href="?action=forum&id=' . $forum['fid'] . '" class="btn">进入版块</a>
+            <div class="forum-stats">
+                <div class="stat-item">
+                    <div class="num">' . $threadCount . '</div>
+                    <div class="label">主题</div>
+                </div>
+                <div class="stat-item">
+                    <div class="num">' . $postCount . '</div>
+                    <div class="label">回复</div>
+                </div>
+            </div>
+            <a href="?action=forum&id=' . $forum['fid'] . '" class="btn-enter"><i class="fas fa-arrow-right"></i> 进入</a>
         </div>';
+        $iconIndex++;
     }
     
     echo '</div>
+        
+        <div class="forum-section">
+            <div class="section-header">
+                <div class="section-title">
+                    <div class="icon"><i class="fas fa-fire"></i></div>
+                    热门话题
+                </div>
+            </div>
+            <div class="forum-card" style="display:block;">';
+    
+    while ($thread = mysqli_fetch_assoc($hotThreads)) {
+        if ($thread['tid']) {
+            echo '<div style="padding:12px 0;border-bottom:1px solid #eee;">
+                <a href="?action=view&tid=' . $thread['tid'] . '" style="color:var(--primary-color);text-decoration:none;font-size:15px;">' . htmlspecialchars($thread['subject']) . '</a>
+                <span style="color:#999;font-size:12px;margin-left:10px;">[' . htmlspecialchars($thread['forum_name']) . ']</span>
+            </div>';
+        }
+    }
+    echo '</div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>&copy; 2024 企业员工论坛 · 内网系统 · 仅限办公网访问</p>
     </div>
 </body>
 </html>';
@@ -144,42 +222,79 @@ function forumList($link) {
     
     if (!isset($_SESSION)) { session_start(); }
     $isLogin = isset($_SESSION['uid']);
+    $username = $_SESSION['username'] ?? '';
+    $avatar = $isLogin ? mb_substr($username, 0, 1) : '?';
     
     echo '<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>' . htmlspecialchars($forum['name']) . ' - 企业论坛</title>
-    <style>
-        body { font-family: "Microsoft YaHei", Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
-        .header { background: #2c3e50; color: #fff; padding: 15px 30px; }
-        .header a { color: #fff; text-decoration: none; margin-right: 20px; }
-        .container { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
-        .thread-list { background: #fff; border-radius: 5px; }
-        .thread-item { padding: 15px 20px; border-bottom: 1px solid #eee; }
-        .thread-title { font-size: 16px; color: #2c3e50; }
-        .thread-title a { color: #2c3e50; text-decoration: none; }
-        .thread-info { color: #999; font-size: 13px; margin-top: 5px; }
-        .btn { display: inline-block; padding: 8px 20px; background: #3498db; color: #fff; text-decoration: none; border-radius: 3px; margin: 20px 0; }
-    </style>
+    <link rel="stylesheet" href="/template/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="header">
-        <a href="?">返回首页</a>
-        <span>' . htmlspecialchars($forum['name']) . '</span>
+        <div class="header-logo">
+            <a href="/" style="text-decoration:none;"><i class="fas fa-comments" style="font-size:32px;color:#667eea;"></i></a>
+            <h1><a href="/" style="text-decoration:none;color:inherit;">企业员工论坛</a></h1>
+        </div>
+        <div class="header-nav">
+            <a href="/"><i class="fas fa-home"></i> 首页</a>
+            ' . ($isLogin ? '
+                <div class="user-info">
+                    <div class="avatar">' . $avatar . '</div>
+                    <span>' . htmlspecialchars($username) . '</span>
+                </div>
+                <a href="?action=logout" style="color:#ff4d4f;"><i class="fas fa-sign-out-alt"></i> 退出</a>
+            ' : '<a href="?action=login"><i class="fas fa-sign-in-alt"></i> 登录</a>') . '
+        </div>
     </div>
+    
     <div class="container">
-        ' . ($isLogin ? '<a href="?action=post&fid=' . $fid . '" class="btn">发布新帖</a>' : '<a href="?action=login" class="btn">登录后发帖</a>') . '
-        <div class="thread-list">';
+        <div class="welcome-banner" style="background: linear-gradient(135deg, #11998e, #38ef7d);">
+            <h2><i class="fas fa-folder-open"></i> ' . htmlspecialchars($forum['name']) . '</h2>
+            <p>' . ($forum['description'] ?? '浏览' . htmlspecialchars($forum['name']) . '版块内容') . '</p>
+        </div>
+        
+        <div style="margin-bottom:20px;">
+            ' . ($isLogin ? '<a href="?action=post&fid=' . $fid . '" class="btn-enter" style="background: linear-gradient(135deg, #11998e, #38ef7d);"><i class="fas fa-pen"></i> 发布新帖</a>' : '<a href="?action=login" class="btn-enter"><i class="fas fa-lock"></i> 登录后发帖</a>') . '
+        </div>
+        
+        <div class="forum-section">
+            <div class="forum-card" style="display:block;padding:0;">
+                <div style="background:#f8f9fa;padding:16px 24px;border-bottom:1px solid #eee;font-weight:600;color:#303133;">
+                    <i class="fas fa-list"></i> 帖子列表
+                </div>';
     
     while ($thread = mysqli_fetch_assoc($threads)) {
-        echo '<div class="thread-item">
-            <div class="thread-title"><a href="?action=view&tid=' . $thread['tid'] . '">' . htmlspecialchars($thread['subject']) . '</a></div>
-            <div class="thread-info">作者: ' . htmlspecialchars($thread['author']) . ' | 回复: ' . $thread['replies'] . ' | 浏览: ' . $thread['views'] . '</div>
+        $timeAgo = time() - $thread['dateline'];
+        if ($timeAgo < 3600) $timeStr = intval($timeAgo/60) . '分钟前';
+        elseif ($timeAgo < 86400) $timeStr = intval($timeAgo/3600) . '小时前';
+        else $timeStr = date('m-d', $thread['dateline']);
+        
+        echo '<div class="thread-item" style="padding:20px 24px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+            <div style="flex:1;">
+                <a href="?action=view&tid=' . $thread['tid'] . '" style="color:var(--text-color);text-decoration:none;font-size:16px;font-weight:500;">' . htmlspecialchars($thread['subject']) . '</a>
+                <div style="margin-top:8px;font-size:13px;color:var(--text-secondary);">
+                    <i class="fas fa-user"></i> ' . htmlspecialchars($thread['author']) . '
+                    <span style="margin:0 10px;"><i class="fas fa-clock"></i> ' . $timeStr . '</span>
+                </div>
+            </div>
+            <div style="text-align:right;min-width:100px;">
+                <div style="color:var(--primary-color);font-size:18px;font-weight:600;">' . $thread['replies'] . '</div>
+                <div style="font-size:12px;color:var(--text-placeholder);">回复</div>
+            </div>
         </div>';
     }
     
     echo '</div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>&copy; 2024 企业员工论坛 · 内网系统</p>
     </div>
 </body>
 </html>';
@@ -259,35 +374,36 @@ function loginForm() {
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>登录 - 企业论坛</title>
-    <style>
-        body { font-family: "Microsoft YaHei", Arial, sans-serif; background: #f5f5f5; padding: 50px; }
-        .login-box { max-width: 400px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 5px; }
-        h2 { margin-top: 0; color: #2c3e50; }
-        .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; margin-bottom: 5px; }
-        .form-group input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 3px; }
-        .btn { width: 100%; padding: 12px; background: #3498db; color: #fff; border: none; border-radius: 3px; cursor: pointer; font-size: 16px; }
-        .btn:hover { background: #2980b9; }
-        .wechat-btn { background: #1aad19; margin-top: 10px; }
-        .wechat-btn:hover { background: #168d13; }
-    </style>
+    <link rel="stylesheet" href="/template/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="login-box">
-        <h2>用户登录</h2>
-        <form action="?action=dologin" method="post">
-            <div class="form-group">
-                <label>用户名</label>
-                <input type="text" name="username" required>
+    <div class="login-container">
+        <div class="login-box">
+            <div style="text-align:center;margin-bottom:30px;">
+                <i class="fas fa-comments" style="font-size:48px;background: linear-gradient(135deg, #667eea, #764ba2);-webkit-background-clip: text;-webkit-text-fill-color: transparent;"></i>
+                <h2>企业员工论坛</h2>
             </div>
-            <div class="form-group">
-                <label>密码</label>
-                <input type="password" name="password" required>
+            <form action="?action=dologin" method="post">
+                <div class="form-group">
+                    <label><i class="fas fa-user"></i> 用户名</label>
+                    <input type="text" name="username" required placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-lock"></i> 密码</label>
+                    <input type="password" name="password" required placeholder="请输入密码">
+                </div>
+                <button type="submit" class="btn-primary"><i class="fas fa-sign-in-alt"></i> 登录</button>
+            </form>
+            <a href="/wechat_oauth.php?action=login">
+                <button class="btn-wechat"><i class="fab fa-weixin"></i> 企业微信扫码登录</button>
+            </a>
+            <div style="text-align:center;margin-top:20px;">
+                <a href="/" style="color:#666;text-decoration:none;font-size:13px;"><i class="fas fa-arrow-left"></i> 返回首页</a>
             </div>
-            <button type="submit" class="btn">登录</button>
-        </form>
-        <a href="/wechat_oauth.php?action=login"><button class="btn wechat-btn">企业微信登录</button></a>
+        </div>
     </div>
 </body>
 </html>';
@@ -327,64 +443,76 @@ function postForm($link) {
     }
     
     $fid = intval($_GET['fid'] ?? 0);
+    $username = $_SESSION['username'] ?? '';
+    $avatar = mb_substr($username, 0, 1);
     
     echo '<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>发布新帖</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>发布新帖 - 企业论坛</title>
     <script src="https://cdn.ckeditor.com/4.16.2/standard/ckeditor.js"></script>
-    <style>
-        body { font-family: "Microsoft YaHei", Arial, sans-serif; background: #f5f5f5; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 5px; }
-        h2 { margin-top: 0; }
-        .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .form-group input[type="text"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 3px; }
-        .btn { padding: 12px 30px; background: #3498db; color: #fff; border: none; border-radius: 3px; cursor: pointer; font-size: 16px; margin-top: 10px; }
-        .btn:hover { background: #2980b9; }
-        .upload-section { margin-bottom: 20px; padding: 15px; background: #f9f9f9; border-radius: 5px; }
-        .upload-section h4 { margin-top: 0; }
-        .file-list { margin-top: 10px; }
-        .file-item { display: inline-block; margin: 5px; padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 3px; }
-    </style>
+    <link rel="stylesheet" href="/template/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="container">
-        <h2>发布新帖</h2>
-        <form action="?action=submit_post" method="post" enctype="multipart/form-data">
-            <input type="hidden" name="fid" value="' . $fid . '">
-            <div class="form-group">
-                <label>标题</label>
-                <input type="text" name="subject" required style="width:100%;padding:12px;font-size:16px;">
+    <div class="header">
+        <div class="header-logo">
+            <a href="/" style="text-decoration:none;"><i class="fas fa-comments" style="font-size:32px;color:#667eea;"></i></a>
+            <h1><a href="/" style="text-decoration:none;color:inherit;">企业员工论坛</a></h1>
+        </div>
+        <div class="header-nav">
+            <a href="/"><i class="fas fa-home"></i> 首页</a>
+            <div class="user-info">
+                <div class="avatar">' . $avatar . '</div>
+                <span>' . htmlspecialchars($username) . '</span>
             </div>
-            <div class="form-group">
-                <label>内容</label>
-                <textarea name="message" id="editor" required></textarea>
-            </div>
-            <div class="upload-section">
-                <h4>上传附件/图片</h4>
-                <input type="file" name="attachments[]" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar">
-                <p style="color:#999;font-size:12px;margin:5px 0 0 0;">支持jpg、png、gif、pdf、doc、xls、zip、rar格式，单个文件最大10MB</p>
-            </div>
-            <button type="submit" class="btn">发布帖子</button>
-        </form>
+            <a href="?action=logout" style="color:#ff4d4f;"><i class="fas fa-sign-out-alt"></i> 退出</a>
+        </div>
     </div>
+    
+    <div class="container">
+        <div class="welcome-banner" style="background: linear-gradient(135deg, #ee0972, #ff6a00);">
+            <h2><i class="fas fa-pen"></i> 发布新帖</h2>
+            <p>分享你的想法，与同事交流</p>
+        </div>
+        
+        <div class="forum-card" style="padding:30px;">
+            <form action="?action=submit_post" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="fid" value="' . $fid . '">
+                <div class="form-group">
+                    <label style="font-size:15px;"><i class="fas fa-heading"></i> 标题</label>
+                    <input type="text" name="subject" required placeholder="请输入帖子标题" style="width:100%;padding:14px;font-size:15px;border:2px solid var(--border-color);border-radius:8px;">
+                </div>
+                <div class="form-group">
+                    <label style="font-size:15px;"><i class="fas fa-align-left"></i> 内容</label>
+                    <textarea name="message" id="editor" required></textarea>
+                </div>
+                <div style="margin-bottom:20px;padding:20px;background:#f8f9fa;border-radius:8px;">
+                    <div style="font-weight:600;margin-bottom:12px;color:var(--text-color);"><i class="fas fa-paperclip"></i> 上传附件/图片</div>
+                    <input type="file" name="attachments[]" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar" style="font-size:14px;">
+                    <p style="color:var(--text-placeholder);font-size:12px;margin:8px 0 0 0;">支持jpg、png、gif、pdf、doc、xls、zip、rar格式，单个文件最大10MB</p>
+                </div>
+                <div style="display:flex;gap:12px;">
+                    <button type="submit" class="btn-enter" style="background: linear-gradient(135deg, #ee0972, #ff6a00);border:none;cursor:pointer;"><i class="fas fa-paper-plane"></i> 发布帖子</button>
+                    <a href="?" class="btn-enter" style="background:#909399;border:none;"><i class="fas fa-times"></i> 取消</a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
     <script>
         CKEDITOR.replace("editor", {
-            height: 300,
+            height: 350,
             filebrowserUploadUrl: "?action=upload_file",
             toolbar: [
                 { name: "document", items: ["Source"] },
-                { name: "clipboard", items: ["Cut", "Copy", "Paste", "PasteText", "PasteFromWord", "Undo", "Redo"] },
-                { name: "editing", items: ["Find", "Replace", "SelectAll"] },
-                { name: "basicstyles", items: ["Bold", "Italic", "Underline", "Strike", "Subscript", "Superscript"] },
-                { name: "paragraph", items: ["NumberedList", "BulletedList", "Outdent", "Indent", "Blockquote"] },
-                { name: "links", items: ["Link", "Unlink", "Anchor"] },
-                { name: "insert", items: ["Image", "Table", "HorizontalRule", "Smiley", "SpecialChar"] },
-                { name: "styles", items: ["Styles", "Format", "Font", "FontSize"] },
-                { name: "colors", items: ["TextColor", "BGColor"] },
-                { name: "tools", items: ["Maximize"] }
+                { name: "clipboard", items: ["Cut", "Copy", "Paste", "Undo", "Redo"] },
+                { name: "basicstyles", items: ["Bold", "Italic", "Underline"] },
+                { name: "paragraph", items: ["NumberedList", "BulletedList"] },
+                { name: "insert", items: ["Image", "Table", "Smiley"] },
+                { name: "styles", items: ["Styles", "FontSize"] }
             ]
         });
     </script>
