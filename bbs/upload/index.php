@@ -267,8 +267,9 @@ function forumList($link) {
         
         <div class="forum-section">
             <div class="forum-card" style="display:block;padding:0;">
-                <div style="background:#f8f9fa;padding:16px 24px;border-bottom:1px solid #eee;font-weight:600;color:#303133;">
-                    <i class="fas fa-list"></i> 帖子列表
+                <div style="background:linear-gradient(135deg, #667eea20, #764ba220);padding:16px 24px;border-bottom:1px solid #eee;font-weight:600;color:#303133;display:flex;align-items:center;justify-content:space-between;">
+                    <span><i class="fas fa-list"></i> 帖子列表</span>
+                    <span style="font-size:13px;font-weight:normal;color:var(--text-secondary);">共 ' . mysqli_num_rows($threads) . ' 篇</span>
                 </div>';
     
     while ($thread = mysqli_fetch_assoc($threads)) {
@@ -277,17 +278,33 @@ function forumList($link) {
         elseif ($timeAgo < 86400) $timeStr = intval($timeAgo/3600) . '小时前';
         else $timeStr = date('m-d', $thread['dateline']);
         
-        echo '<div class="thread-item" style="padding:20px 24px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
-            <div style="flex:1;">
-                <a href="?action=view&tid=' . $thread['tid'] . '" style="color:var(--text-color);text-decoration:none;font-size:16px;font-weight:500;">' . htmlspecialchars($thread['subject']) . '</a>
-                <div style="margin-top:8px;font-size:13px;color:var(--text-secondary);">
-                    <i class="fas fa-user"></i> ' . htmlspecialchars($thread['author']) . '
-                    <span style="margin:0 10px;"><i class="fas fa-clock"></i> ' . $timeStr . '</span>
+        $isNew = $timeAgo < 86400;
+        
+        echo '<div class="thread-item" style="padding:20px 24px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;transition:all 0.2s;">
+            <div style="flex:1;display:flex;align-items:center;gap:16px;">
+                <div style="width:48px;height:48px;background:linear-gradient(135deg, var(--primary-color), #36cfc9);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:600;">
+                    ' . mb_substr($thread['author'], 0, 1) . '
+                </div>
+                <div style="flex:1;">
+                    <a href="?action=view&tid=' . $thread['tid'] . '" style="color:var(--text-color);text-decoration:none;font-size:16px;font-weight:500;display:flex;align-items:center;gap:8px;">' . htmlspecialchars($thread['subject']) . '
+                    ' . ($isNew ? '<span style="background:#ff4d4f;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">新</span>' : '') . '
+                    </a>
+                    <div style="margin-top:8px;font-size:13px;color:var(--text-secondary);">
+                        <span style="color:var(--primary-color);font-weight:500;">' . htmlspecialchars($thread['author']) . '</span>
+                        <span style="margin:0 8px;">·</span>
+                        <i class="fas fa-clock"></i> ' . $timeStr . '
+                    </div>
                 </div>
             </div>
-            <div style="text-align:right;min-width:100px;">
-                <div style="color:var(--primary-color);font-size:18px;font-weight:600;">' . $thread['replies'] . '</div>
-                <div style="font-size:12px;color:var(--text-placeholder);">回复</div>
+            <div style="display:flex;align-items:center;gap:20px;text-align:center;">
+                <div style="padding:8px 16px;background:#f0f0f0;border-radius:8px;">
+                    <div style="color:var(--primary-color);font-size:16px;font-weight:600;">' . $thread['replies'] . '</div>
+                    <div style="font-size:11px;color:var(--text-placeholder);">回复</div>
+                </div>
+                <div style="padding:8px 16px;background:#f0f0f0;border-radius:8px;">
+                    <div style="color:#666;font-size:16px;font-weight:600;">' . ($thread['views']+1) . '</div>
+                    <div style="font-size:11px;color:var(--text-placeholder);">浏览</div>
+                </div>
             </div>
         </div>';
     }
@@ -355,39 +372,47 @@ function viewThread($link) {
         <div class="forum-section">
             <div class="forum-card" style="display:block;padding:0;">
                 <div style="background:#f8f9fa;padding:16px 24px;border-bottom:1px solid #eee;font-weight:600;color:#303133;">
-                    <i class="fas fa-comments"></i> 全部回复
+                    <i class="fas fa-comments"></i> 全部回复 (' . mysqli_num_rows($posts) . ')
                 </div>';
     
+    $floor = 1;
     while ($post = mysqli_fetch_assoc($posts)) {
         $timeAgo = time() - $post['dateline'];
         if ($timeAgo < 3600) $timeStr = intval($timeAgo/60) . '分钟前';
         elseif ($timeAgo < 86400) $timeStr = intval($timeAgo/3600) . '小时前';
         else $timeStr = date('m-d H:i', $post['dateline']);
         
-        echo '<div style="padding:24px;border-bottom:1px solid #eee;">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-                <div class="avatar" style="width:40px;height:40px;font-size:16px;">' . mb_substr($post['username'], 0, 1) . '</div>
-                <div>
-                    <div style="font-weight:600;color:var(--primary-color);">' . htmlspecialchars($post['username']) . '</div>
+        $floorStyle = $post['first'] == 1 ? 'background:linear-gradient(135deg, #667eea20, #764ba220);border-left:4px solid #667eea;' : 'background:#fff;';
+        
+        echo '<div style="padding:24px;border-bottom:1px solid #eee;' . $floorStyle . '">
+            <div style="display:flex;align-items:flex-start;gap:16px;">
+                <div style="text-align:center;min-width:60px;">
+                    <div class="avatar" style="width:48px;height:48px;font-size:20px;margin-bottom:8px;">' . mb_substr($post['username'], 0, 1) . '</div>
                     <div style="font-size:12px;color:var(--text-secondary);">' . $timeStr . '</div>
                 </div>
-            </div>
-            <div style="line-height:1.8;font-size:15px;">' . $post['message'] . '</div>';
+                <div style="flex:1;">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                        <span style="font-weight:600;color:var(--primary-color);font-size:15px;">' . htmlspecialchars($post['username']) . '</span>
+                        ' . ($post['first'] == 1 ? '<span style="background:#667eea;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;">楼主</span>' : '<span style="background:#e0e0e0;color:#666;padding:2px 8px;border-radius:4px;font-size:11px;">' . $floor . '楼</span>') . '
+                    </div>
+                    <div style="line-height:1.8;font-size:15px;min-height:40px;">' . $post['message'] . '</div>';
         
         $attachList = mysqli_query($link, "SELECT * FROM pre_forum_attachment WHERE tid=$tid AND pid=" . $post['pid']);
         if (mysqli_num_rows($attachList) > 0) {
-            echo '<div style="margin-top:15px;padding:12px;background:#f8f9fa;border-radius:8px;">';
+            echo '<div style="margin-top:15px;padding:12px;background:#f8f9fa;border-radius:8px;border:1px dashed #ddd;">';
+            echo '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;"><i class="fas fa-paperclip"></i> 附件:</div>';
             while ($att = mysqli_fetch_assoc($attachList)) {
                 if ($att['isimage']) {
-                    echo '<a href="' . $att['filepath'] . '" target="_blank"><img src="' . $att['filepath'] . '" style="max-width:200px;max-height:150px;margin:5px;border-radius:4px;"></a>';
+                    echo '<a href="' . $att['filepath'] . '" target="_blank"><img src="' . $att['filepath'] . '" style="max-width:180px;max-height:120px;margin:5px;border-radius:4px;border:1px solid #ddd;"></a>';
                 } else {
-                    echo '<a href="' . $att['filepath'] . '" download style="display:inline-block;margin:5px;padding:8px 12px;background:#fff;border:1px solid #ddd;border-radius:4px;text-decoration:none;color:var(--text-color);font-size:13px;"><i class="fas fa-paperclip"></i> ' . htmlspecialchars($att['filename']) . '</a>';
+                    echo '<a href="' . $att['filepath'] . '" download style="display:inline-flex;align-items:center;margin:5px;padding:8px 12px;background:#fff;border:1px solid #ddd;border-radius:4px;text-decoration:none;color:var(--text-color);font-size:13px;"><i class="fas fa-file-alt"></i> ' . htmlspecialchars($att['filename']) . '</a>';
                 }
             }
             echo '</div>';
         }
         
-        echo '</div>';
+        echo '</div></div></div>';
+        $floor++;
     }
     
     echo '</div>
@@ -396,11 +421,11 @@ function viewThread($link) {
         <div class="forum-section">
             <div class="section-header">
                 <div class="section-title">
-                    <div class="icon"><i class="fas fa-reply"></i></div>
-                    发表回复
+                    <div class="icon"><i class="fas fa-edit"></i></div>
+                    快速回复
                 </div>
             </div>
-            <div class="forum-card" style="padding:24px;">';
+            <div class="forum-card" style="padding:24px;background:#fafafa;border:2px dashed #ddd;border-radius:12px;">';
     
     if ($isLogin) {
         echo '<form action="?action=submit_reply" method="post">
