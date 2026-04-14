@@ -45,6 +45,9 @@ switch ($action) {
     case 'submit_post':
         submitPost($link);
         break;
+    case 'submit_reply':
+        submitReply($link);
+        break;
     case 'upload_file':
         uploadFile($link);
         break;
@@ -309,53 +312,76 @@ function viewThread($link) {
     $posts = mysqli_query($link, "SELECT p.*, m.username FROM pre_forum_post p 
         LEFT JOIN pre_common_member m ON p.authorid=m.uid WHERE p.tid=$tid ORDER BY p.dateline");
     
-    $attachments = mysqli_query($link, "SELECT * FROM pre_forum_attachment WHERE tid=$tid");
+    if (!isset($_SESSION)) { session_start(); }
+    $isLogin = isset($_SESSION['uid']);
+    $username = $_SESSION['username'] ?? '';
+    $avatar = $isLogin ? mb_substr($username, 0, 1) : '?';
     
     echo '<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>' . htmlspecialchars($thread['subject']) . '</title>
-    <style>
-        body { font-family: "Microsoft YaHei", Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
-        .header { background: #2c3e50; color: #fff; padding: 15px 30px; }
-        .header a { color: #fff; text-decoration: none; margin-right: 20px; }
-        .container { max-width: 1000px; margin: 20px auto; padding: 0 20px; }
-        .thread { background: #fff; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
-        .thread h2 { margin: 0 0 15px 0; color: #2c3e50; }
-        .post { background: #fff; padding: 20px; border-radius: 5px; margin-bottom: 15px; }
-        .post-author { font-weight: bold; color: #3498db; margin-bottom: 10px; }
-        .post-content { line-height: 1.8; }
-        .attachments { margin-top: 15px; padding: 10px; background: #f9f9f9; border-radius: 5px; }
-        .attachments h4 { margin: 0 0 10px 0; font-size: 14px; }
-        .attachment-item { display: inline-block; margin: 5px; padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 3px; }
-        .attachment-item img { max-width: 200px; max-height: 150px; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>' . htmlspecialchars($thread['subject']) . ' - 企业论坛</title>
+    <link rel="stylesheet" href="/template/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.ckeditor.com/4.16.2/standard/ckeditor.js"></script>
 </head>
 <body>
     <div class="header">
-        <a href="?">返回首页</a>
-        <a href="?action=forum&id=' . $thread['fid'] . '">返回版块</a>
+        <div class="header-logo">
+            <a href="/" style="text-decoration:none;"><i class="fas fa-comments" style="font-size:32px;color:#667eea;"></i></a>
+            <h1><a href="/" style="text-decoration:none;color:inherit;">企业员工论坛</a></h1>
+        </div>
+        <div class="header-nav">
+            <a href="/"><i class="fas fa-home"></i> 首页</a>
+            <a href="?action=forum&id=' . $thread['fid'] . '"><i class="fas fa-arrow-left"></i> 返回版块</a>
+            ' . ($isLogin ? '
+                <div class="user-info">
+                    <div class="avatar">' . $avatar . '</div>
+                    <span>' . htmlspecialchars($username) . '</span>
+                </div>
+                <a href="?action=logout" style="color:#ff4d4f;"><i class="fas fa-sign-out-alt"></i> 退出</a>
+            ' : '<a href="?action=login"><i class="fas fa-sign-in-alt"></i> 登录</a>') . '
+        </div>
     </div>
+    
     <div class="container">
-        <div class="thread">
-            <h2>' . htmlspecialchars($thread['subject']) . '</h2>
-            <div class="post-info">作者: ' . htmlspecialchars($thread['author']) . ' | 发布时间: ' . date('Y-m-d H:i', $thread['dateline']) . '</div>
-        </div>';
+        <div class="welcome-banner" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+            <h2><i class="fas fa-file-alt"></i> ' . htmlspecialchars($thread['subject']) . '</h2>
+            <p><i class="fas fa-user"></i> ' . htmlspecialchars($thread['author']) . ' · <i class="fas fa-clock"></i> ' . date('Y-m-d H:i', $thread['dateline']) . ' · <i class="fas fa-eye"></i> ' . ($thread['views']+1) . ' 浏览</p>
+        </div>
+        
+        <div class="forum-section">
+            <div class="forum-card" style="display:block;padding:0;">
+                <div style="background:#f8f9fa;padding:16px 24px;border-bottom:1px solid #eee;font-weight:600;color:#303133;">
+                    <i class="fas fa-comments"></i> 全部回复
+                </div>';
     
     while ($post = mysqli_fetch_assoc($posts)) {
-        echo '<div class="post">
-            <div class="post-author">' . htmlspecialchars($post['username']) . ' (' . date('Y-m-d H:i', $post['dateline']) . ')</div>
-            <div class="post-content">' . $post['message'] . '</div>';
+        $timeAgo = time() - $post['dateline'];
+        if ($timeAgo < 3600) $timeStr = intval($timeAgo/60) . '分钟前';
+        elseif ($timeAgo < 86400) $timeStr = intval($timeAgo/3600) . '小时前';
+        else $timeStr = date('m-d H:i', $post['dateline']);
+        
+        echo '<div style="padding:24px;border-bottom:1px solid #eee;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                <div class="avatar" style="width:40px;height:40px;font-size:16px;">' . mb_substr($post['username'], 0, 1) . '</div>
+                <div>
+                    <div style="font-weight:600;color:var(--primary-color);">' . htmlspecialchars($post['username']) . '</div>
+                    <div style="font-size:12px;color:var(--text-secondary);">' . $timeStr . '</div>
+                </div>
+            </div>
+            <div style="line-height:1.8;font-size:15px;">' . $post['message'] . '</div>';
         
         $attachList = mysqli_query($link, "SELECT * FROM pre_forum_attachment WHERE tid=$tid AND pid=" . $post['pid']);
         if (mysqli_num_rows($attachList) > 0) {
-            echo '<div class="attachments"><h4>附件:</h4>';
+            echo '<div style="margin-top:15px;padding:12px;background:#f8f9fa;border-radius:8px;">';
             while ($att = mysqli_fetch_assoc($attachList)) {
                 if ($att['isimage']) {
-                    echo '<a href="' . $att['filepath'] . '" target="_blank"><img src="' . $att['filepath'] . '" alt="' . htmlspecialchars($att['filename']) . '"></a>';
+                    echo '<a href="' . $att['filepath'] . '" target="_blank"><img src="' . $att['filepath'] . '" style="max-width:200px;max-height:150px;margin:5px;border-radius:4px;"></a>';
                 } else {
-                    echo '<a class="attachment-item" href="' . $att['filepath'] . '" download>' . htmlspecialchars($att['filename']) . ' (' . round($att['filesize']/1024) . 'KB)</a>';
+                    echo '<a href="' . $att['filepath'] . '" download style="display:inline-block;margin:5px;padding:8px 12px;background:#fff;border:1px solid #ddd;border-radius:4px;text-decoration:none;color:var(--text-color);font-size:13px;"><i class="fas fa-paperclip"></i> ' . htmlspecialchars($att['filename']) . '</a>';
                 }
             }
             echo '</div>';
@@ -365,8 +391,44 @@ function viewThread($link) {
     }
     
     echo '</div>
+        </div>
+        
+        <div class="forum-section">
+            <div class="section-header">
+                <div class="section-title">
+                    <div class="icon"><i class="fas fa-reply"></i></div>
+                    发表回复
+                </div>
+            </div>
+            <div class="forum-card" style="padding:24px;">';
+    
+    if ($isLogin) {
+        echo '<form action="?action=submit_reply" method="post">
+            <input type="hidden" name="tid" value="' . $tid . '">
+            <div class="form-group">
+                <textarea name="message" id="reply-editor" required></textarea>
+            </div>
+            <button type="submit" class="btn-enter"><i class="fas fa-paper-plane"></i> 提交回复</button>
+        </form>
+        <script>CKEDITOR.replace("reply-editor", {height: 150, toolbar: [["Bold","Italic","Underline"],["NumberedList","BulletedList"],["Link","Image"]]});</script>';
+    } else {
+        echo '<div style="text-align:center;padding:30px;">
+            <p style="color:var(--text-secondary);margin-bottom:15px;">登录后才能回复</p>
+            <a href="?action=login" class="btn-enter"><i class="fas fa-sign-in-alt"></i> 立即登录</a>
+        </div>';
+    }
+    
+    echo '</div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>&copy; 2024 企业员工论坛 · 内网系统</p>
+    </div>
 </body>
 </html>';
+    
+    mysqli_query($link, "UPDATE pre_forum_thread SET views=views+1 WHERE tid=$tid");
 }
 
 function loginForm() {
@@ -730,6 +792,57 @@ function uploadFile($link) {
         echo json_encode($results);
     } else {
         echo json_encode(['error' => '没有文件']);
+    }
+}
+
+function submitReply($link) {
+    if (!isset($_SESSION)) { session_start(); }
+    if (!isset($_SESSION['uid'])) {
+        die('请先登录');
+    }
+    
+    $tid = intval($_POST['tid']);
+    $message_raw = trim($_POST['message'] ?? '');
+    $uid = $_SESSION['uid'];
+    $username = mysqli_real_escape_string($link, $_SESSION['username']);
+    $now = time();
+    
+    if (empty($message_raw)) {
+        die('回复内容不能为空');
+    }
+    
+    require_once __DIR__ . '/source/class/sensitive_filter.php';
+    $filter = new SensitiveWordFilter($link);
+    $filter->init();
+    $check = $filter->filter($message_raw);
+    $isWhitelist = $filter->isWhitelistUser($link, $uid);
+    
+    $message_esc = mysqli_real_escape_string($link, $message_raw);
+    
+    if ($isWhitelist) {
+        $thread = mysqli_fetch_assoc(mysqli_query($link, "SELECT fid, author FROM pre_forum_thread WHERE tid=$tid"));
+        mysqli_query($link, "INSERT INTO pre_forum_post (fid, tid, first, author, authorid, subject, message, dateline) 
+            VALUES (" . $thread['fid'] . ", $tid, 0, '$username', $uid, '', '$message_esc', $now)");
+        $pid = mysqli_insert_id($link);
+        
+        mysqli_query($link, "UPDATE pre_forum_thread SET replies=replies+1, lastpost=$now, lastposter='$username' WHERE tid=$tid");
+        
+        header("Location: ?action=view&tid=$tid");
+    } elseif ($check['blocked']) {
+        $content_esc = mysqli_real_escape_string($link, $message_raw);
+        mysqli_query($link, "INSERT INTO pre_common_audit (uid, username, fid, tid, pid, content, type, status, createtime) 
+            VALUES ($uid, '$username', " . $thread['fid'] . ", $tid, 0, '$content_esc', 'reply', 0, $now)");
+        
+        echo '回复包含敏感词，已提交人工审核。<br><a href="?action=view&tid=' . $tid . '">返回帖子</a>';
+    } else {
+        $thread = mysqli_fetch_assoc(mysqli_query($link, "SELECT fid FROM pre_forum_thread WHERE tid=$tid"));
+        mysqli_query($link, "INSERT INTO pre_forum_post (fid, tid, first, author, authorid, subject, message, dateline) 
+            VALUES (" . $thread['fid'] . ", $tid, 0, '$username', $uid, '', '$message_esc', $now)");
+        $pid = mysqli_insert_id($link);
+        
+        mysqli_query($link, "UPDATE pre_forum_thread SET replies=replies+1, lastpost=$now, lastposter='$username' WHERE tid=$tid");
+        
+        header("Location: ?action=view&tid=$tid");
     }
 }
 
