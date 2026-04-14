@@ -342,7 +342,9 @@ function viewThread($link) {
     <title>' . htmlspecialchars($thread['subject']) . ' - 企业论坛</title>
     <link rel="stylesheet" href="/template/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.ckeditor.com/4.16.2/standard/ckeditor.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/kindeditor@4.1.10/themes/default/default.css">
+    <script src="https://cdn.jsdelivr.net/npm/kindeditor@4.1.10/kindeditor-all-min.js"></script>
+    <script src="/template/kindeditor.js"></script>
 </head>
 <body>
     <div class="header">
@@ -435,7 +437,7 @@ function viewThread($link) {
             </div>
             <button type="submit" class="btn-enter"><i class="fas fa-paper-plane"></i> 提交回复</button>
         </form>
-        <script>CKEDITOR.replace("reply-editor", {height: 150, toolbar: [["Bold","Italic","Underline"],["NumberedList","BulletedList"],["Link","Image"]]});</script>';
+        <script>KindEditor.ready(function(K) { K.create("#reply-editor", {width:"100%",height:"150px",items:["bold","italic","underline","forecolor","link","image","emoticons"]}); });</script>';
     } else {
         echo '<div style="text-align:center;padding:30px;">
             <p style="color:var(--text-secondary);margin-bottom:15px;">登录后才能回复</p>
@@ -539,7 +541,9 @@ function postForm($link) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>发布新帖 - 企业论坛</title>
-    <script src="https://cdn.ckeditor.com/4.16.2/standard/ckeditor.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/kindeditor@4.1.10/themes/default/default.css">
+    <script src="https://cdn.jsdelivr.net/npm/kindeditor@4.1.10/kindeditor-all-min.js"></script>
+    <script src="/template/kindeditor.js"></script>
     <link rel="stylesheet" href="/template/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -583,26 +587,15 @@ function postForm($link) {
                 </div>
                 <div style="display:flex;gap:12px;">
                     <button type="submit" class="btn-enter" style="background: linear-gradient(135deg, #ee0972, #ff6a00);border:none;cursor:pointer;"><i class="fas fa-paper-plane"></i> 发布帖子</button>
-                    <a href="?" class="btn-enter" style="background:#909399;border:none;"><i class="fas fa-times"></i> 取消</a>
+                    <a href=\"?\" class=\"btn-enter\" style=\"background:#909399;border:none;\"><i class=\"fas fa-times\"></i> 取消</a>
                 </div>
             </form>
         </div>
     </div>
     
-    <script>
-        CKEDITOR.replace("editor", {
-            height: 350,
-            filebrowserUploadUrl: "?action=upload_file",
-            toolbar: [
-                { name: "document", items: ["Source"] },
-                { name: "clipboard", items: ["Cut", "Copy", "Paste", "Undo", "Redo"] },
-                { name: "basicstyles", items: ["Bold", "Italic", "Underline"] },
-                { name: "paragraph", items: ["NumberedList", "BulletedList"] },
-                { name: "insert", items: ["Image", "Table", "Smiley"] },
-                { name: "styles", items: ["Styles", "FontSize"] }
-            ]
-        });
-    </script>
+    <link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/kindeditor@4.1.10/themes/default/default.css\">
+    <script src=\"https://cdn.jsdelivr.net/npm/kindeditor@4.1.10/kindeditor-all-min.js\"></script>
+    <script src=\"/template/kindeditor.js\"></script>
 </body>
 </html>';
 }
