@@ -146,7 +146,7 @@ class SensitiveWordFilter {
     }
 }
 
-function addSensitiveWord($dbLink, $word, $replacement = '***', $level = 1) {
+function SensitiveFilter_addWord($dbLink, $word, $replacement = '***', $level = 1) {
     $word = mysqli_real_escape_string($dbLink, trim($word));
     $replacement = mysqli_real_escape_string($dbLink, $replacement);
     $level = intval($level);
@@ -158,7 +158,7 @@ function addSensitiveWord($dbLink, $word, $replacement = '***', $level = 1) {
     return $result;
 }
 
-function getSensitiveWords($dbLink) {
+function SensitiveFilter_getWords($dbLink) {
     $result = mysqli_query($dbLink, "SELECT * FROM pre_common_sensitive ORDER BY id DESC");
     $words = [];
     while ($row = mysqli_fetch_assoc($result)) {
@@ -167,12 +167,12 @@ function getSensitiveWords($dbLink) {
     return $words;
 }
 
-function deleteSensitiveWord($dbLink, $id) {
+function SensitiveFilter_deleteWord($dbLink, $id) {
     $id = intval($id);
     return mysqli_query($dbLink, "DELETE FROM pre_common_sensitive WHERE id=$id");
 }
 
-function addToWhitelist($dbLink, $uid, $username, $note = '') {
+function SensitiveFilter_addWhitelist($dbLink, $uid, $username, $note = '') {
     $uid = intval($uid);
     $username = mysqli_real_escape_string($dbLink, $username);
     $note = mysqli_real_escape_string($dbLink, $note);
@@ -184,12 +184,12 @@ function addToWhitelist($dbLink, $uid, $username, $note = '') {
     return $result;
 }
 
-function removeFromWhitelist($dbLink, $id) {
+function SensitiveFilter_removeWhitelist($dbLink, $id) {
     $id = intval($id);
     return mysqli_query($dbLink, "DELETE FROM pre_common_whitelist WHERE id=$id");
 }
 
-function getWhitelistUsers($dbLink) {
+function SensitiveFilter_getWhitelist($dbLink) {
     $result = mysqli_query($dbLink, "SELECT * FROM pre_common_whitelist ORDER BY id DESC");
     $users = [];
     while ($row = mysqli_fetch_assoc($result)) {
@@ -198,7 +198,7 @@ function getWhitelistUsers($dbLink) {
     return $users;
 }
 
-function addToAuditQueue($dbLink, $uid, $username, $fid, $tid, $pid, $content, $type = 'post') {
+function SensitiveFilter_addAudit($dbLink, $uid, $username, $fid, $tid, $pid, $content, $type = 'post') {
     $uid = intval($uid);
     $username = mysqli_real_escape_string($dbLink, $username);
     $content = mysqli_real_escape_string($dbLink, $content);
@@ -215,13 +215,13 @@ function addToAuditQueue($dbLink, $uid, $username, $fid, $tid, $pid, $content, $
     return $result;
 }
 
-function approvePost($dbLink, $tid) {
+function SensitiveFilter_approvePost($dbLink, $tid) {
     $tid = intval($tid);
     mysqli_query($dbLink, "UPDATE pre_forum_thread SET displayorder=0 WHERE tid=$tid");
     mysqli_query($dbLink, "UPDATE pre_common_audit SET status=1, audittime=" . time() . " WHERE tid=$tid AND type='post'");
 }
 
-function rejectPost($dbLink, $tid, $reason = '') {
+function SensitiveFilter_rejectPost($dbLink, $tid, $reason = '') {
     $tid = intval($tid);
     $reason = mysqli_real_escape_string($dbLink, $reason);
     mysqli_query($dbLink, "DELETE FROM pre_forum_thread WHERE tid=$tid");
@@ -229,7 +229,7 @@ function rejectPost($dbLink, $tid, $reason = '') {
     mysqli_query($dbLink, "UPDATE pre_common_audit SET status=2, audittime=" . time() . ", reason='$reason' WHERE tid=$tid AND type='post'");
 }
 
-function getPendingAudits($dbLink) {
+function SensitiveFilter_getPending($dbLink) {
     $result = mysqli_query($dbLink, "SELECT * FROM pre_common_audit WHERE status=0 ORDER BY createtime DESC");
     $audits = [];
     while ($row = mysqli_fetch_assoc($result)) {
@@ -238,7 +238,7 @@ function getPendingAudits($dbLink) {
     return $audits;
 }
 
-function getAuditedPosts($dbLink, $limit = 50) {
+function SensitiveFilter_getAudited($dbLink, $limit = 50) {
     $limit = intval($limit);
     $result = mysqli_query($dbLink, "SELECT * FROM pre_common_audit WHERE status>0 ORDER BY audittime DESC LIMIT $limit");
     $audits = [];

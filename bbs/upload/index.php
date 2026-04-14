@@ -403,6 +403,12 @@ function adminPanel($link) {
         exit;
     }
     
+    $uid = $_SESSION['uid'];
+    $user = mysqli_fetch_assoc(mysqli_query($link, "SELECT adminid FROM pre_common_member WHERE uid=$uid"));
+    if (!$user || $user['adminid'] == 0) {
+        die('无权限访问管理后台');
+    }
+    
     $tab = $_GET['tab'] ?? 'audit';
     
     echo '<!DOCTYPE html>
@@ -435,6 +441,7 @@ function adminPanel($link) {
                 <a href="?action=admin&tab=audit" class="' . ($tab=='audit'?'active':'') . '">待审核</a>
                 <a href="?action=admin&tab=sensitive" class="' . ($tab=='sensitive'?'active':'') . '">敏感词管理</a>
                 <a href="?action=admin&tab=whitelist" class="' . ($tab=='whitelist'?'active':'') . '">白名单用户</a>
+                <a href="?action=admin&tab=user" class="' . ($tab=='user'?'active':'') . '">用户管理</a>
                 <a href="?action=admin&tab=forum" class="' . ($tab=='forum'?'active':'') . '">板块管理</a>
                 <a href="?">返回首页</a>
             </div>
@@ -504,6 +511,82 @@ function adminPanel($link) {
                 <td>' . date('Y-m-d H:i', $item['addtime']) . '</td>
                 <td>' . htmlspecialchars($item['note']) . '</td>
                 <td><a href="?action=del_whitelist&id=' . $item['id'] . '">移除</a></td>
+            </tr>';
+        }
+        echo '</table></div>';
+    }
+    
+    if ($tab == 'user') {
+        if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_user'])) {
+            $username = mysqli_real_escape_string($link, $_POST['username']);
+            $password = md5($_POST['password']);
+            $email = mysqli_real_escape_string($link, $_POST['email'] ?? '');
+            $groupid = intval($_POST['groupid'] ?? 10);
+            $adminid = intval($_POST['adminid'] ?? 0);
+            $now = time();
+            
+            $check = mysqli_query($link, "SELECT uid FROM pre_common_member WHERE username='$username'");
+            if (mysqli_num_rows($check) == 0) {
+                mysqli_query($link, "INSERT INTO pre_common_member (username, password, email, regdate, groupid, adminid) 
+                    VALUES ('$username', '$password', '$email', $now, $groupid, $adminid)");
+                $uid = mysqli_insert_id($link);
+                mysqli_query($link, "INSERT INTO pre_common_member_count (uid) VALUES ($uid)");
+            }
+        }
+        
+        if (isset($_GET['del_user'])) {
+            $uid = intval($_GET['del_user']);
+            if ($uid > 1) {
+                mysqli_query($link, "DELETE FROM pre_common_member WHERE uid=$uid");
+                mysqli_query($link, "DELETE FROM pre_common_member_count WHERE uid=$uid");
+            }
+        }
+        
+        if (isset($_GET['set_admin'])) {
+            $uid = intval($_GET['set_admin']);
+            $adminid = intval($_GET['set_admin']);
+            mysqli_query($link, "UPDATE pre_common_member SET adminid=$adminid WHERE uid=$uid");
+        }
+        
+        echo '<div class="tab-content active">
+            <h3>用户管理</h3>
+            <form action="?action=admin&tab=user" method="post" class="form-inline">
+                <input type="hidden" name="add_user" value="1">
+                <input type="text" name="username" placeholder="用户名" required>
+                <input type="password" name="password" placeholder="密码" required>
+                <input type="email" name="email" placeholder="邮箱">
+                <select name="groupid">
+                    <option value="10">普通用户</option>
+                    <option value="1">超级管理员</option>
+                    <option value="2">管理员</option>
+                    <option value="3">版主</option>
+                </select>
+                <select name="adminid">
+                    <option value="0">普通用户</option>
+                    <option value="1">超级管理员</option>
+                    <option value="2">管理员</option>
+                </select>
+                <button type="submit">添加用户</button>
+            </form>
+            <table>
+            <tr><th>ID</th><th>用户名</th><th>邮箱</th><th>注册时间</th><th>用户组</th><th>管理权限</th><th>操作</th></tr>';
+        
+        $result = mysqli_query($link, "SELECT uid, username, email, regdate, groupid, adminid 
+            FROM pre_common_member ORDER BY uid");
+        
+        while ($item = mysqli_fetch_assoc($result)) {
+            $groupTitle = $item['groupid'] == 1 ? '超级管理员' : ($item['groupid'] == 2 ? '管理员' : ($item['groupid'] == 3 ? '版主' : '普通用户'));
+            $adminLabel = $item['adminid'] == 1 ? '超管' : ($item['adminid'] == 2 ? '管理员' : '普通');
+            $setAdminLink = $item['adminid'] == 0 ? "<a href=\"?action=admin&tab=user&set_admin=1&uid={$item['uid']}\">设为管理员</a>" : "<a href=\"?action=admin&tab=user&set_admin=0&uid={$item['uid']}\">取消管理员</a>";
+            
+            echo '<tr>
+                <td>' . $item['uid'] . '</td>
+                <td>' . htmlspecialchars($item['username']) . '</td>
+                <td>' . htmlspecialchars($item['email'] ?? '-') . '</td>
+                <td>' . date('Y-m-d', $item['regdate']) . '</td>
+                <td>' . $groupTitle . '</td>
+                <td>' . $adminLabel . '</td>
+                <td>' . ($item['uid'] > 1 ? $setAdminLink . ' | <a href="?action=admin&tab=user&del_user=' . $item['uid'] . '">删除</a>' : '-') . '</td>
             </tr>';
         }
         echo '</table></div>';
