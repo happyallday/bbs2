@@ -45,6 +45,9 @@ switch ($action) {
     case 'submit_post':
         submitPost($link);
         break;
+    case 'upload_file':
+        uploadFile($link);
+        break;
     case 'admin':
         adminPanel($link);
         break;
@@ -191,6 +194,8 @@ function viewThread($link) {
     $posts = mysqli_query($link, "SELECT p.*, m.username FROM pre_forum_post p 
         LEFT JOIN pre_common_member m ON p.authorid=m.uid WHERE p.tid=$tid ORDER BY p.dateline");
     
+    $attachments = mysqli_query($link, "SELECT * FROM pre_forum_attachment WHERE tid=$tid");
+    
     echo '<!DOCTYPE html>
 <html>
 <head>
@@ -206,6 +211,10 @@ function viewThread($link) {
         .post { background: #fff; padding: 20px; border-radius: 5px; margin-bottom: 15px; }
         .post-author { font-weight: bold; color: #3498db; margin-bottom: 10px; }
         .post-content { line-height: 1.8; }
+        .attachments { margin-top: 15px; padding: 10px; background: #f9f9f9; border-radius: 5px; }
+        .attachments h4 { margin: 0 0 10px 0; font-size: 14px; }
+        .attachment-item { display: inline-block; margin: 5px; padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 3px; }
+        .attachment-item img { max-width: 200px; max-height: 150px; }
     </style>
 </head>
 <body>
@@ -222,8 +231,22 @@ function viewThread($link) {
     while ($post = mysqli_fetch_assoc($posts)) {
         echo '<div class="post">
             <div class="post-author">' . htmlspecialchars($post['username']) . ' (' . date('Y-m-d H:i', $post['dateline']) . ')</div>
-            <div class="post-content">' . nl2br(htmlspecialchars($post['message'])) . '</div>
-        </div>';
+            <div class="post-content">' . $post['message'] . '</div>';
+        
+        $attachList = mysqli_query($link, "SELECT * FROM pre_forum_attachment WHERE tid=$tid AND pid=" . $post['pid']);
+        if (mysqli_num_rows($attachList) > 0) {
+            echo '<div class="attachments"><h4>附件:</h4>';
+            while ($att = mysqli_fetch_assoc($attachList)) {
+                if ($att['isimage']) {
+                    echo '<a href="' . $att['filepath'] . '" target="_blank"><img src="' . $att['filepath'] . '" alt="' . htmlspecialchars($att['filename']) . '"></a>';
+                } else {
+                    echo '<a class="attachment-item" href="' . $att['filepath'] . '" download>' . htmlspecialchars($att['filename']) . ' (' . round($att['filesize']/1024) . 'KB)</a>';
+                }
+            }
+            echo '</div>';
+        }
+        
+        echo '</div>';
     }
     
     echo '</div>
@@ -310,33 +333,61 @@ function postForm($link) {
 <head>
     <meta charset="utf-8">
     <title>发布新帖</title>
+    <script src="https://cdn.ckeditor.com/4.16.2/standard/ckeditor.js"></script>
     <style>
         body { font-family: "Microsoft YaHei", Arial, sans-serif; background: #f5f5f5; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 5px; }
+        .container { max-width: 900px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 5px; }
         h2 { margin-top: 0; }
         .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; margin-bottom: 5px; }
-        .form-group input, .form-group textarea { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 3px; }
-        .form-group textarea { height: 200px; }
-        .btn { padding: 12px 30px; background: #3498db; color: #fff; border: none; border-radius: 3px; cursor: pointer; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input[type="text"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 3px; }
+        .btn { padding: 12px 30px; background: #3498db; color: #fff; border: none; border-radius: 3px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        .btn:hover { background: #2980b9; }
+        .upload-section { margin-bottom: 20px; padding: 15px; background: #f9f9f9; border-radius: 5px; }
+        .upload-section h4 { margin-top: 0; }
+        .file-list { margin-top: 10px; }
+        .file-item { display: inline-block; margin: 5px; padding: 8px 12px; background: #fff; border: 1px solid #ddd; border-radius: 3px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>发布新帖</h2>
-        <form action="?action=submit_post" method="post">
+        <form action="?action=submit_post" method="post" enctype="multipart/form-data">
             <input type="hidden" name="fid" value="' . $fid . '">
             <div class="form-group">
                 <label>标题</label>
-                <input type="text" name="subject" required>
+                <input type="text" name="subject" required style="width:100%;padding:12px;font-size:16px;">
             </div>
             <div class="form-group">
                 <label>内容</label>
-                <textarea name="message" required></textarea>
+                <textarea name="message" id="editor" required></textarea>
             </div>
-            <button type="submit" class="btn">提交</button>
+            <div class="upload-section">
+                <h4>上传附件/图片</h4>
+                <input type="file" name="attachments[]" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar">
+                <p style="color:#999;font-size:12px;margin:5px 0 0 0;">支持jpg、png、gif、pdf、doc、xls、zip、rar格式，单个文件最大10MB</p>
+            </div>
+            <button type="submit" class="btn">发布帖子</button>
         </form>
     </div>
+    <script>
+        CKEDITOR.replace("editor", {
+            height: 300,
+            filebrowserUploadUrl: "?action=upload_file",
+            toolbar: [
+                { name: "document", items: ["Source"] },
+                { name: "clipboard", items: ["Cut", "Copy", "Paste", "PasteText", "PasteFromWord", "Undo", "Redo"] },
+                { name: "editing", items: ["Find", "Replace", "SelectAll"] },
+                { name: "basicstyles", items: ["Bold", "Italic", "Underline", "Strike", "Subscript", "Superscript"] },
+                { name: "paragraph", items: ["NumberedList", "BulletedList", "Outdent", "Indent", "Blockquote"] },
+                { name: "links", items: ["Link", "Unlink", "Anchor"] },
+                { name: "insert", items: ["Image", "Table", "HorizontalRule", "Smiley", "SpecialChar"] },
+                { name: "styles", items: ["Styles", "Format", "Font", "FontSize"] },
+                { name: "colors", items: ["TextColor", "BGColor"] },
+                { name: "tools", items: ["Maximize"] }
+            ]
+        });
+    </script>
 </body>
 </html>';
 }
@@ -397,7 +448,160 @@ function submitPost($link) {
         mysqli_query($link, "INSERT INTO pre_forum_post (fid, tid, first, author, authorid, subject, message, dateline) 
             VALUES ($fid, $tid, 1, '$username', $uid, '$subject_esc', '$message_esc', $now)");
         
+        $pid = mysqli_insert_id($link);
+        
+        handleAttachments($link, $tid, $pid, $uid);
+        
         echo '发布成功！<a href="?action=view&tid=' . $tid . '">查看帖子</a>';
+    }
+}
+
+function handleAttachments($link, $tid, $pid, $uid) {
+    if (!isset($_FILES['attachments']) || empty($_FILES['attachments']['name'][0])) {
+        return;
+    }
+    
+    $uploadDir = __DIR__ . '/data/attachment/forum/' . date('Ym') . '/';
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+    }
+    
+    $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 
+                    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed'];
+    
+    $maxSize = 10 * 1024 * 1024;
+    
+    foreach ($_FILES['attachments']['name'] as $i => $name) {
+        if ($_FILES['attachments']['error'][$i] !== UPLOAD_ERR_OK) continue;
+        
+        $size = $_FILES['attachments']['size'][$i];
+        if ($size > $maxSize) continue;
+        
+        $tmpName = $_FILES['attachments']['tmp_name'][$i];
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $tmpName);
+        finfo_close($finfo);
+        
+        if (!in_array($mimeType, $allowedTypes)) continue;
+        
+        $isImage = in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif']) ? 1 : 0;
+        $ext = pathinfo($name, PATHINFO_EXTENSION);
+        $newName = uniqid() . '.' . $ext;
+        $targetPath = $uploadDir . $newName;
+        
+        if (move_uploaded_file($tmpName, $targetPath)) {
+            $filepath = '/data/attachment/forum/' . date('Ym') . '/' . $newName;
+            $filename_esc = mysqli_real_escape_string($link, $name);
+            $filepath_esc = mysqli_real_escape_string($link, $filepath);
+            $filetype_esc = mysqli_real_escape_string($link, $mimeType);
+            
+            mysqli_query($link, "INSERT INTO pre_forum_attachment 
+                (tid, pid, uid, filename, filetype, filesize, filepath, dateline, isimage) 
+                VALUES ($tid, $pid, $uid, '$filename_esc', '$filetype_esc', $size, '$filepath_esc', " . time() . ", $isImage)");
+        }
+    }
+}
+
+function uploadFile($link) {
+    header('Content-Type: application/json');
+    
+    if (!isset($_SESSION)) { session_start(); }
+    if (!isset($_SESSION['uid'])) {
+        echo json_encode(['error' => '未登录']);
+        exit;
+    }
+    
+    $uploadDir = __DIR__ . '/data/attachment/forum/' . date('Ym') . '/';
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0777, true);
+    }
+    
+    $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 
+                    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed'];
+    
+    $maxSize = 10 * 1024 * 1024; // 10MB
+    
+    if (isset($_FILES['upload'])) {
+        $file = $_FILES['upload'];
+        
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            echo json_encode(['error' => '上传失败']);
+            exit;
+        }
+        
+        if ($file['size'] > $maxSize) {
+            echo json_encode(['error' => '文件超过10MB限制']);
+            exit;
+        }
+        
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $file['tmp_name']);
+        finfo_close($finfo);
+        
+        if (!in_array($mimeType, $allowedTypes)) {
+            echo json_encode(['error' => '不支持的文件类型']);
+            exit;
+        }
+        
+        $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+        $newName = uniqid() . '.' . $ext;
+        $targetPath = $uploadDir . $newName;
+        
+        if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+            $fileUrl = '/data/attachment/forum/' . date('Ym') . '/' . $newName;
+            echo json_encode([
+                'url' => $fileUrl,
+                'filename' => $file['name'],
+                'filesize' => $file['size']
+            ]);
+        } else {
+            echo json_encode(['error' => '保存文件失败']);
+        }
+    } elseif (isset($_FILES['attachments'])) {
+        $results = [];
+        foreach ($_FILES['attachments']['name'] as $i => $name) {
+            if ($_FILES['attachments']['error'][$i] === UPLOAD_ERR_OK) {
+                $tmpName = $_FILES['attachments']['tmp_name'][$i];
+                $size = $_FILES['attachments']['size'][$i];
+                
+                if ($size > $maxSize) {
+                    $results[] = ['name' => $name, 'error' => '文件过大'];
+                    continue;
+                }
+                
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                $mimeType = finfo_file($finfo, $tmpName);
+                finfo_close($finfo);
+                
+                if (!in_array($mimeType, $allowedTypes)) {
+                    $results[] = ['name' => $name, 'error' => '不支持的类型'];
+                    continue;
+                }
+                
+                $ext = pathinfo($name, PATHINFO_EXTENSION);
+                $newName = uniqid() . '.' . $ext;
+                $targetPath = $uploadDir . $newName;
+                
+                if (move_uploaded_file($tmpName, $targetPath)) {
+                    $fileUrl = '/data/attachment/forum/' . date('Ym') . '/' . $newName;
+                    $results[] = [
+                        'name' => $name,
+                        'url' => $fileUrl,
+                        'size' => $size,
+                        'success' => true
+                    ];
+                } else {
+                    $results[] = ['name' => $name, 'error' => '上传失败'];
+                }
+            }
+        }
+        echo json_encode($results);
+    } else {
+        echo json_encode(['error' => '没有文件']);
     }
 }
 
